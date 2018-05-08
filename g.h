@@ -15,13 +15,15 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-struct Motor
-{
-    short int   status; // motor status : fault==>-1, stop==>0, start==>2, enable==>1
-    float pwm; //-99.99~99.99 %
-    short int   speed; //-9999~9999 r/min
-    short int   current; //0 ~ 9999mA
-};
+
+#include <altctrl.h>
+#include <canctrl.h>
+#include <kellerctrl.h>
+#include <lightctrl.h>
+#include <platformctrl.h>
+#include <tcpctrl.h>
+#include <xsensctrl.h>
+
 
 
 class g
@@ -58,6 +60,29 @@ public:
     static float CurrentPosition1;
     static float CurrentPosition2;
     static float CurrentPosition3;
+
+    /******keller******/
+    static float pressval; // pressure value
+    static float tempval;  // tempreture value
+
+    /******light******/
+    static short int brightness[2]; //current brightness value from 0 to 76==> 0x00 ~ 0x4c
+    static short int lighttemp[2];
+
+    /******altimeter******/
+    static float distance[2];
+    static float energy[2];
+    static float correlation[2];
+    static float temperature[2];
+    static float watertemp;
+
+    static LightCtrl light;
+    static AltCtrl   alt;
+    static CanCtrl   can;
+    static KellerCtrl keller;
+    static PlatformCtrl plat;
+    static TcpCtrl    tcp;
+    static XsensCtrl xsens;
 };
 
 #endif // G_H

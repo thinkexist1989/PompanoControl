@@ -3,7 +3,6 @@
 
 #include <QThread>
 #include <PID.h>
-#include <g.h>
 
 class PlatformCtrl : public QThread
 {
@@ -36,13 +35,17 @@ public:
     float CurrentPosition1;
     float CurrentPosition2;
     float CurrentPosition3;
+    //Axises Set Zero
+    char SetZeroFlag;
 
 
     int OpenCommPort(char *devname);  //open serial port
     int GetPosition(int fd, char *GEP);
-    void MotorControl(int fd,int  Speed, char *SVS);
+    void MotorControl(int fd,int  Speed, char *SVS, int minv);
     int ReadPosFile(int &rem_pos1, int &rem_pos2, int &rem_pos3);
     void WritePosFile(int Encoder1, int Encoder2, int Encoder3, char *pos123, char *temp, int fileDes);
+
+    static void *RecvProc(void *arg);
 
 
 private:

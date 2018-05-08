@@ -11,23 +11,39 @@
 
 #include <QDebug>
 #include <QMutex>
+#include <QFile>
 
-extern QMutex mutex;
+#include <pthread.h>
 
+#include <g.h>
+
+#define MINXV  300
+#define XPRECISION 40
+#define XRATIO 270
+
+#define YPRECISION 60
+#define MINYV  200
+#define YRATIO 120
+
+#define MINZV  250
+#define ZRATIO 480
+#define ZPRECISION 260
+
+extern QMutex tcpmutex;
 //PlatformCtrl::PlatformCtrl() {}
 
 PlatformCtrl::PlatformCtrl(int fd) : fd(fd) {
-    m_kp1 = 0.05;
-    m_ki1 = 0;
-    m_kd1 = 0;
+    m_kp1 = 0.2;
+    m_ki1 = 0.02;
+    m_kd1 = 0.02;
 
-    m_kp2 = 0.05;
-    m_ki2 = 0;
-    m_kd2 = 0;
+    m_kp2 = 0.15;
+    m_ki2 = 0.01;
+    m_kd2 = 0.02;
 
-    m_kp3 = 0.05;
+    m_kp3 = 0.3;
     m_ki3 = 0;
-    m_kd3 = 0;
+    m_kd3 = 0.02;
 }
 
 void PlatformCtrl::run()
@@ -68,106 +84,145 @@ void PlatformCtrl::run()
     char SVS4[]="2,SVS,2,";
 
     greg::PID PID1;                 //set axis1 PID parameters
-    PID1.setRefreshInterval(0.05);
-    PID1.setWeights(m_kp1,m_ki1,m_kd1);
-    PID1.setErrorThreshold(80);    
+    PID1.setRefreshInterval(0.33);
+//    PID1.setWeights(m_kp1,m_ki1,m_kd1);
+    PID1.setErrorThreshold(XPRECISION);
 //    PID1.setDesiredPoint(-20000);
 
     greg::PID PID2;                 //set axis2 PID parameters
-    PID2.setRefreshInterval(0.05);
-    PID2.setWeights(m_kp2,m_ki2,m_kd2);
-    PID2.setErrorThreshold(60);
+    PID2.setRefreshInterval(0.33);
+//    PID2.setWeights(m_kp2,m_ki2,m_kd2);
+    PID2.setErrorThreshold(YPRECISION);
 //    PID2.setDesiredPoint(5000);
 
     greg::PID PID3;                 //set axis3 PID parameters
-    PID3.setRefreshInterval(0.1);
-    PID3.setWeights(m_kp3,m_ki3,m_kd3);
-    PID3.setErrorThreshold(50);    
+    PID3.setRefreshInterval(0.33);
+    PID3.setWeights(-m_kp3,-m_ki3,-m_kd3);
+    PID3.setErrorThreshold(ZPRECISION);
 //    PID3.setDesiredPoint(5000);
 
      ReadPosFile(rem_pos1, rem_pos2, rem_pos3);
-     fclose(fopen("posdata.txt", "w"));
-     int fileDes=open("posdata.txt",O_CREAT|O_RDWR|O_APPEND,0666);
+     fclose(fopen("/root/posdata.txt", "w"));
+     int fileDes=open("/root/posdata.txt",O_CREAT|O_RDWR|O_SYNC);
 
-     std::cout<<"x="<<rem_pos1<<std::endl;
-     std::cout<<"y="<<rem_pos2<<std::endl;
-     std::cout<<"z="<<rem_pos3<<std::endl;
-     AxisSpeedXY = 500;
-     AxisSpeedZ = 300;
-     WireFeedSpeed = 300;
+     std::cout<<"x="<<std::dec<<rem_pos1<<std::endl;
+     std::cout<<"y="<<std::dec<<rem_pos2<<std::endl;
+     std::cout<<"z="<<std::dec<<rem_pos3<<std::endl;
+     AxisSpeedXY = 350;
+     AxisSpeedZ = 500;
+     WireFeedSpeed = 0;
+     SetZeroFlag = 0x00;
 
-     int desiredpos1 = 30;     //The value is between -160 and 160
-     int desiredpos2 = 30;
-     int desiredpos3 = 30;
+//     int desiredpos1 = 30;     //The value is between -160 and 160
+//     int desiredpos2 = 30;
+//     int desiredpos3 = 30;
+
+     TargetPosition1=(float)rem_pos1*70.0/(64.0*XRATIO);
+     TargetPosition2=(float)rem_pos2*70.0/(64.0*YRATIO);
+     TargetPosition3=(float)rem_pos3*52.0/(64.0*ZRATIO);
 
     while(!stopped)
-    {
-        // Axises Speed
-        AxisSpeedXY = g::AxisSpeedXY;
-        AxisSpeedZ = g::AxisSpeedZ;
-        WireFeedSpeed = g::WireFeedSpeed;
-        PID1.setOutputLowerLimit(-AxisSpeedXY*0.75);
-        PID1.setOutputUpperLimit(AxisSpeedXY*0.75);
-        PID2.setOutputLowerLimit(-AxisSpeedXY);
-        PID2.setOutputUpperLimit(AxisSpeedXY);
+    {       
+        PID1.setOutputLowerLimit(-AxisSpeedXY);
+        PID1.setOutputUpperLimit(AxisSpeedXY);
+        PID2.setOutputLowerLimit(-AxisSpeedXY*0.65);
+        PID2.setOutputUpperLimit(AxisSpeedXY*0.65);
         PID3.setOutputLowerLimit(-AxisSpeedZ);
         PID3.setOutputUpperLimit(AxisSpeedZ);
-//        if((desiredpos1>160)||(desiredpos2>160)){
-//            std::cout << "TargetPosition Out of Range!" << std::endl;
-//            break;
-//        }
+
+//        float p1 = AxisSpeedXY/1000.0;
+//        float p2 = AxisSpeedZ/1000.0;
+
+      //  std::cout << p1 << ", " << p2 << std::endl;
+//        PID1.setWeights(m_kp1*p1,m_ki1*p1,m_kd1*p1);
+//        PID2.setWeights(m_kp2*p1,m_ki2*p1,m_kd2*p1);
+        PID1.setWeights(-m_kp1,-m_ki1,-m_kd1);
+        PID2.setWeights(m_kp2,m_ki2,m_kd2);
+
+        switch(SetZeroFlag) {                  //Axises Set Zero
+        case 0x00:
+            break;
+        case 0x01:                             //Axis of X
+            write(fd,CEP1,len_send);
+            usleep(10000);
+            rem_pos1=0;
+            TargetPosition1 = 0;
+            SetZeroFlag = 0x00;
+            std::cout <<"Set X Zero!" <<std::endl;
+            break;
+        case 0x02:                             //Axis of Y
+            write(fd,CEP2,len_send);
+            usleep(10000);
+            rem_pos2=0;
+            TargetPosition2 = 0;
+            SetZeroFlag = 0x00;
+            break;
+        case 0x03:                             //Axis of Z
+            write(fd,CEP3,len_send);
+            usleep(10000);
+            rem_pos3=0;
+            TargetPosition3 = 0;
+            SetZeroFlag = 0x00;
+            break;
+        }
+
+        if((abs(TargetPosition1)>160)||(abs(TargetPosition2)>160)||(abs(TargetPosition3)>20)) {
+            std::cout << "PLTAFORM: TargetPosition is out of Range!" << std::endl;
+            continue;
+        }
+
 //        TargetPosition1 = g::TargetPosition1;
 //        TargetPosition2 = g::TargetPosition2;
 //        TargetPosition3 = g::TargetPosition3;
-//        POSITION1=TargetPosition1*90*64/70-rem_pos1;        //position of axis1
-//        POSITION2=TargetPosition2*120*64/70-rem_pos2;       //position of axis2
-//        POSITION3=TargetPosition3*270*64/52-rem_pos3;       //position of axis3
-//        PID1.setDesiredPoint(POSITION1);
-//        PID2.setDesiredPoint(POSITION2);
-//        PID3.setDesiredPoint(POSITION3);
 
-        POSITION1=desiredpos1*90*64/70-rem_pos1;
-        POSITION2=desiredpos2*120*64/70-rem_pos2;
-        POSITION3=desiredpos3*270*64/52-rem_pos3;
+
+        POSITION1=TargetPosition1*XRATIO*64.0/70.0-rem_pos1;        //position of axis1
+        POSITION2=TargetPosition2*YRATIO*64.0/70.0-rem_pos2;       //position of axis2
+        POSITION3=TargetPosition3*ZRATIO*64.0/52.0-rem_pos3;       //position of axis3
         PID1.setDesiredPoint(POSITION1);
         PID2.setDesiredPoint(POSITION2);
         PID3.setDesiredPoint(POSITION3);
+
+//        POSITION1=desiredpos1*90*64/70 - rem_pos1;
+//        POSITION2=desiredpos2*120*64/70 -rem_pos2;
+//        POSITION3=desiredpos3*270*64/52-rem_pos3;
+//        PID1.setDesiredPoint(POSITION1);
+//        PID2.setDesiredPoint(POSITION2);
+//        PID3.setDesiredPoint(POSITION3);
 
     /***Axis1**/
         int temp1=GetPosition(fd, GEP1);
         if(temp1 != 0xffff){
             Encoder1 = temp1;
         }
-        Speed1 = PID1.refresh(Encoder1);
-        MotorControl(fd,Speed1, SVS1);
-        if(abs(Encoder1 -POSITION1)<80){
-            desiredpos1 = -desiredpos1;
+        Speed1 = PID1.refresh((float)Encoder1);
+        if(Speed1 != 0){
+            std::cout << "xspeed: " << Speed1 << std::endl;
         }
+        MotorControl(fd,Speed1, SVS1,MINXV);
+
 
     /***Axis2**/
         int temp2 =GetPosition(fd, GEP2);
         if(temp2 != 0xffff){
             Encoder2 = temp2;
+          //  std::cout << Encoder2 <<std::endl;
         }
-        Speed2 = PID2.refresh(Encoder2);
-        MotorControl(fd,Speed2, SVS2);
-        if(abs(Encoder2 -POSITION2)<60){
-            desiredpos2 = -desiredpos2;
-        }
+        Speed2 = PID2.refresh((float)Encoder2);
+        MotorControl(fd,Speed2, SVS2,MINYV);
+
 
     /***Axis3**/
         int temp3 =GetPosition(fd, GEP3);
+
         if(temp3 != 0xffff){
             Encoder3 = temp3;
         }
-        Speed3 = PID3.refresh(Encoder3);
-        MotorControl(fd,Speed3, SVS3);
-        if(abs(Encoder3 -POSITION3)<40){
-            desiredpos3 = -desiredpos3;
-        }
+        Speed3 = PID3.refresh((float)Encoder3);
+        MotorControl(fd,Speed3, SVS3, MINZV);
 
     /***Axis4***/
-        MotorControl(fd,WireFeedSpeed, SVS4);
+        MotorControl(fd,WireFeedSpeed, SVS4, 0);
 
     /***Record position***/
         Encoder1+=rem_pos1;
@@ -175,15 +230,15 @@ void PlatformCtrl::run()
         Encoder3+=rem_pos3;
         WritePosFile(Encoder1, Encoder2, Encoder3, pos123, temp, fileDes);
 
-        CurrentPosition1=Encoder1*70/(64*90);
-        CurrentPosition2=Encoder2*70/(64*120);
-        CurrentPosition3=Encoder3*52/(64*270);
+        CurrentPosition1=(float)Encoder1*70.0/(64.0*XRATIO);
+        CurrentPosition2=(float)Encoder2*70.0/(64.0*YRATIO);
+        CurrentPosition3=(float)Encoder3*52.0/(64.0*ZRATIO);
 
-        g::CurrentPosition1 = CurrentPosition1;
-        g::CurrentPosition2 = CurrentPosition2;
-        g::CurrentPosition3 = CurrentPosition3;
+        pthread_t RP; //RecvProc
+        int arg1 = 0;
+        int ret1 = pthread_create(&RP, NULL, RecvProc, & arg1);
+        pthread_detach(RP);
     }
-
 }
 
 int PlatformCtrl::OpenCommPort(char *devname)
@@ -256,7 +311,7 @@ int PlatformCtrl::GetPosition(int fd, char *GEP)
     int  Encoder = 0;
     memset(RcvBuf,0,20);
     write(fd,GEP,strlen(GEP));
-    usleep(15000);
+    usleep(10000);
     n = read(fd,RcvBuf,20);
     if(RcvBuf[n-1]!='\n'){
         std::cout << "PlATFORM:Recieve Data Error!" << std::endl;
@@ -268,7 +323,7 @@ int PlatformCtrl::GetPosition(int fd, char *GEP)
     }
 }
 
-void PlatformCtrl::MotorControl(int fd, int Speed, char *SVS)
+void PlatformCtrl::MotorControl(int fd, int Speed, char *SVS, int minv)
 {
     char SpdSbuf[20];
     char CER1[]="1,CER\n";
@@ -280,29 +335,29 @@ void PlatformCtrl::MotorControl(int fd, int Speed, char *SVS)
         write(fd,CER2,6);
     }
     memset(SpdSbuf,0,20);
-    if((abs(Speed) < 300)&&(Speed != 0))
-        Speed = (Speed > 0)?300:-300;
+    if((abs(Speed) < minv)&&(Speed != 0))
+        Speed = (Speed > 0)?minv:-minv;
     sprintf(SpdSbuf,"%s%d\n",SVS,Speed);
-    std::cout << SpdSbuf << std::endl;
+  //  std::cout << SpdSbuf << std::endl;
     write(fd,SpdSbuf,strlen(SpdSbuf));
     usleep(10000);
 }
 
 int PlatformCtrl::ReadPosFile(int &rem_pos1, int &rem_pos2, int &rem_pos3)
 {
-    char* fileName="posdata.txt";
+    char* fileName="/root/posdata.txt";
     int fileDes=open(fileName,O_CREAT|O_RDWR|O_APPEND,0666);                     //open position file, creat it if don't exist.
     if(fileDes==-1){
-      std::cout<<"the file open failed with the code : "<<errno<< std::endl;
+      std::cout<<"PLATFORM: the file open failed with the code : "<<errno<< std::endl;
       return 0;
     }
-     std::cout<<"the file open success\n"<< std::endl;
+     std::cout<<"PLATFORM: the file open success\n"<< std::endl;
 
      /*Read the last line of "posdata.txt" */
      FILE *fp = fopen(fileName,"r");
      char sline[1024]={0};
      char *lastline;
-     int i,j,k=0,last_len=0;
+     int i=0,j=0,k=0,last_len=0;
      int flag=0;
      char last_pos1[20]={0}, last_pos2[20]={0}, last_pos3[20]={0};
      size_t rd;
@@ -321,13 +376,13 @@ int PlatformCtrl::ReadPosFile(int &rem_pos1, int &rem_pos2, int &rem_pos3)
          }
      }
      if(i<0){
-         std::cout<<"Read Data Error!\n"<<std::endl;
+         std::cout<<"PLATFORM: Read Data Error!\n"<<std::endl;
      }
 //        qDebug("last line is:\n%s\n", sline+i+1);
      lastline=sline+i+1;
      last_len=strlen(lastline);
 
-     for(j=0;j<last_len-1;j++){                 //extract the position data in the last line
+     for(j=0;j<last_len;j++){                 //extract the position data in the last line
          switch(flag){
          case 0:
              if(lastline[j]!='*')
@@ -367,8 +422,9 @@ int PlatformCtrl::ReadPosFile(int &rem_pos1, int &rem_pos2, int &rem_pos3)
 
 void PlatformCtrl::WritePosFile(int Encoder1, int Encoder2, int Encoder3, char *pos123, char *temp, int fileDes)
 {
+
     sprintf(pos123,"%d*%d*%d\n",Encoder1,Encoder2,Encoder3);
-    std::cout << pos123 << std::endl;
+ //   std::cout << pos123 << std::endl;
     if(strcmp(pos123,temp)!=0)              //Don't reacrd it if same as previous data.
     {
         if(write(fileDes,pos123,strlen(pos123))==-1)    //鏂囦欢鍐欏叆
@@ -377,4 +433,11 @@ void PlatformCtrl::WritePosFile(int Encoder1, int Encoder2, int Encoder3, char *
            }
     }
     strcpy(temp,pos123);
+}
+
+void *PlatformCtrl::RecvProc(void *arg)
+{
+    tcpmutex.lock();
+    g::tcp.SendPlatData();
+    tcpmutex.unlock();
 }

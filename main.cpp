@@ -1,40 +1,37 @@
 #include <QCoreApplication>
 #include <g.h>
-#include <tcpctrl.h>
-#include <xsensctrl.h>
-#include <lightctrl.h>
-#include <altctrl.h>
-#include <kellerctrl.h>
-#include <canctrl.h>
-#include <platformctrl.h>
+//#include <tcpctrl.h>
+//#include <xsensctrl.h>
+//#include <lightctrl.h>
+//#include <altctrl.h>
+//#include <kellerctrl.h>
+//#include <canctrl.h>
+//#include <platformctrl.h>
 
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
     /****tcp****/
-    TcpCtrl tcp;
-    tcp.Init();
+    g::tcp.Init();
     /****xsens****/
-    XsensCtrl xsens;
-    xsens.OpenCommPort("/dev/ttyO2");
-    xsens.start();
+    g::xsens.OpenCommPort("/dev/ttyO1"); //ttyO1 RS232
+    g::xsens.start();
     /****keller****/
-    KellerCtrl keller;
-    keller.InitCommunication();
-    keller.OpenCommPort("/dev/ttyUSB1");
-    keller.start();
-    /****keller****/
-    LightCtrl light;
-    light.OpenCommPort("/dev/ttyUSB2");
-    light.start();
+    g::keller.InitCommunication();
+    g::keller.OpenCommPort("/dev/ttyUSB1");
+    g::keller.start();
+    /****light****/
+    g::light.OpenCommPort("/dev/ttyUSB2");
+    g::light.start();
     /****can****/
-    CanCtrl can;
-    can.InitCan();
-    can.start();
+    g::can.InitCan();
+    g::can.start();
+    /****altimeter****/
+    g::alt.OpenCommPort("/dev/ttyO2"); //ttyO2 is RS485
+    g::alt.start();
     /****platform****/
-    PlatformCtrl plat;
-    plat.OpenCommPort("/dev/ttyUSB0");
-    plat.start();
+    g::plat.OpenCommPort("/dev/ttyUSB0");
+    g::plat.start();
 
     return a.exec();
 }

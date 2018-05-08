@@ -18,12 +18,13 @@
 #include <iostream>
 #include <math.h>
 #include <QMutex>
+#include <g.h>
 
 #define FRAMELEN  8
 #define MOTOR1    0x581 //return is 0x581 , send is 0x601
 #define MOTOR9    0x589
 
-extern QMutex canmutex;
+extern QMutex tcpmutex;
 
 union res4
 {
@@ -61,6 +62,8 @@ float CanCtrl::wall_temp;
 
 std::bitset<8> CanCtrl::bsCtrl;
 int CanCtrl::cntarray[8];
+
+bool CanCtrl::btemp = false;
 
 
 
@@ -110,22 +113,22 @@ int CanCtrl::InitCan()
 void CanCtrl::motorctrl()
 {
     for(int i = 0; i < 8 ; i++){
-        if(bsCtrl[i] == 1){
+       // if(bsCtrl[i] == 1){
             res2 val;
             send_frame.can_id = 0x601 + i;
             send_frame.can_dlc = 8;
-            val.i = abs((int)(motorvec[i].pwm * 100));
+            val.i = abs((int)(g::motorvec[i].pwm * 100));
             send_frame.data[0] = 0x23;
             send_frame.data[1] = 0xFF;
             send_frame.data[2] = 0x60;
-            send_frame.data[3] = motorvec[i].pwm >=0? 0x02 : 0x04;
+            send_frame.data[3] = g::motorvec[i].pwm >=0? 0x02 : 0x04;
             send_frame.data[4] = val.data[0];
             send_frame.data[5] = val.data[1];
             send_frame.data[6] = 0x00;
             send_frame.data[7] = 0x00;
             int nbytes = write(s, &send_frame, sizeof(struct can_frame));
-            nbytes = read(s, &frame, sizeof(struct can_frame));
-        }
+            usleep(10000);
+       // }
     }
 }
 
@@ -175,15 +178,22 @@ void CanCtrl::frameanalysis()
     if (frame.can_dlc == FRAMELEN){
         /**<info display>**/
         //[1]
- //       std::cout<<std::dec<< cnt++ <<" :  Get frame: "<<std::hex<<frame.can_id<<'\t';
- //       std::cout<<"frame dlc: "<<(int)frame.can_dlc<<'\t';
+//        if(frame.can_id == 0x581){
+//            for (int i = 0; i < frame.can_dlc && i < sizeof(frame.data); i++){
+//                std::cout<<std::hex<<(int)frame.data[i]<<' ';
+//            }
+//            std::cout<<std::endl;
+//        }
+//        static int cnt = 0;
+//        std::cout<<std::dec<< cnt++ <<" :  Get frame: "<<std::hex<<frame.can_id<<'\t';
+//        std::cout<<"frame dlc: "<<(int)frame.can_dlc<<'\t';
 
- //       for (int i = 0; i < frame.can_dlc && i < sizeof(frame.data); i++){
- //           std::cout<<std::hex<<(int)frame.data[i]<<' ';
- //       }
- //       std::cout<<std::endl;
+//        for (int i = 0; i < frame.can_dlc && i < sizeof(frame.data); i++){
+//            std::cout<<std::hex<<(int)frame.data[i]<<' ';
+//        }
+//        std::cout<<std::endl;
         //[2]
-//        for(int i = 0; i < 8 ;i++){
+//        for(int i = 0; i < 9 ;i++){
 //            std::cout << std::hex << 0x601 +i << ":  " ;
 //            std::cout << std::dec << cntarray[i] << "  ";
 //        }
@@ -193,13 +203,17 @@ void CanCtrl::frameanalysis()
         if(frame.can_id == MOTOR9){  //temperature module
             int a[2] = {frame.data[4], frame.data[5]};
             int   b  = (a[1]<<8) + a[0];
-            cabin_temp = ((float)(((b>>12)&0xf)*1000+((b>>8)&0xf)*100+((b>>4)&0xf)*10+(b&0xf)))/100.0;
+            cabin_temp = ((float)(((b>>12)&0xf)*1000+((b>>8)&0xf)*100+((b>>4)&0xf)*10+(b&0xf)))/10.0;
             g::cabin_temp = cabin_temp;
 
             int aa[2] = {frame.data[6], frame.data[7]};
                   b  = (aa[1]<<8) + aa[0];
-            wall_temp  = ((float)(((b>>12)&0xf)*1000+((b>>8)&0xf)*100+((b>>4)&0xf)*10+(b&0xf)))/100.0;
+            wall_temp  = ((float)(((b>>12)&0xf)*1000+((b>>8)&0xf)*100+((b>>4)&0xf)*10+(b&0xf)))/10.0;
             g::wall_temp = wall_temp;
+
+            tcpmutex.lock();
+            g::tcp.SendTempData();
+            tcpmutex.unlock();
         }
         else{
             int no = frame.can_id - MOTOR1; //No. of Motor
@@ -234,32 +248,20 @@ void CanCtrl::frameanalysis()
                     bs.set(no);
                     break;
                 case 0x02:
-
+                    if(frame.data[6] != 0){
+                        memcpy(&(g::motorvec[no].speed),&(frame.data[4]),2);
+                        memcpy(&(g::motorvec[no].current),&(frame.data[6]),2);
+                        bs.set(no); //set flag bit
+                    }
                     break;
-                case 0x03:{
-                    memcpy(&motorvec[no].speed,&frame.data[4],2);
-                    memcpy(&motorvec[no].current,&frame.data[6],2);
-
-                    memcpy(&g::motorvec[no].speed,&frame.data[4],2);
-                    memcpy(&g::motorvec[no].current,&frame.data[6],2);
-                    bs.set(no); //set flag bit
-                    break;
-                }
                 case 0x04:
-
+                    if(frame.data[6] != 0){
+                        memcpy(&g::motorvec[no].speed,&frame.data[4],2);
+                        g::motorvec[no].speed = -g::motorvec[no].speed;
+                        memcpy(&g::motorvec[no].current,&frame.data[6],2);
+                        bs.set(no); // set flag bit
+                    }
                     break;
-                case 0x05:{
-                    memcpy(&motorvec[no].speed,&frame.data[4],2);
-                    motorvec[no].speed = -motorvec[no].speed;
-                    memcpy(&motorvec[no].current,&frame.data[6],2);
-
-                    memcpy(&g::motorvec[no].speed,&frame.data[4],2);
-                    g::motorvec[no].speed = -g::motorvec[no].speed;
-                    memcpy(&g::motorvec[no].current,&frame.data[6],2);
-
-                    bs.set(no); // set flag bit
-                    break;
-                }
                 default:
                     break;
                 }
@@ -272,6 +274,7 @@ void CanCtrl::frameanalysis()
     else
         std::cout << "Get frame failed!" << std::endl;
 }
+
 
 void CanCtrl::motorstart()
 {
@@ -364,26 +367,20 @@ void *CanCtrl::RecvProc(void *arg)
 
 void *CanCtrl::SendProc(void *arg)
 {
-    bool d = true;
-    float vv = 0;
     while(!stopped){
-        get_motor_info();
-         usleep(50000);
-        if(d == true){
-            vv += 10;
-            if(vv >= 60){
-                d = false;
-            }
+        if(btemp == true){
+            get_temp();
+            btemp = false;
+            usleep(50000);
         }
-        else if(d == false){
-            vv -= 10;
-            if(vv <= -60){
-                d = true;
-            }
-        }
-        for(int i = 0; i < 8 ; i++){
-            motorctrl(0x601+i, vv);
-        }
+    //    get_motor_info();
+        usleep(80000);
+        motorctrl();
+        usleep(80000);
+        tcpmutex.lock();
+        g::tcp.SendMotorData();
+        tcpmutex.unlock();
+
     }
 }
 

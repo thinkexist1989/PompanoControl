@@ -18,12 +18,16 @@
 #include <vector>
 #include <bitset>
 
-#include <g.h>
-
 #define CAN_INIT_OK     0
 #define CAN_INIT_FAIL   -1
 
-
+struct Motor
+{
+    short int   status; // motor status : fault==>-1, stop==>0, start==>2, enable==>1
+    float pwm; //-99.99~99.99 %
+    short int   speed; //-9999~9999 r/min
+    short int   current; //0 ~ 9999mA
+};
 
 
 
@@ -43,6 +47,8 @@ public:
     static struct ifreq ifr;
     static int s;
 
+    static bool btemp;
+
     static std::vector<Motor> motorvec;
 
     static float cabin_temp;
@@ -52,7 +58,7 @@ public:
     static int cntarray[8];
 
 
-    inline std::vector<Motor>& get_motorvec() {return motorvec;}
+    //inline std::vector<Motor>& get_motorvec() {return motorvec;}
     inline float get_cabin_temp() {return cabin_temp;}
     inline float get_wall_temp() {return wall_temp;}
     inline int sgn(float a) {return a >= 0?1:-1;}

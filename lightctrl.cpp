@@ -13,35 +13,34 @@
 #include <QMutex>
 
 #include <iostream>
+#include <g.h>
 
 #define ID1 1
 #define ID2 2
 
-
+extern QMutex tcpmutex;
 
 LightCtrl::LightCtrl(int fd): m_hPort(fd),isnew(0) {}
 
 void LightCtrl::run()
 {
-//    if(isnew == 0x01) // 0 0 0 1   id = 1
-//        set_brightness(ID1, brightness[ID1]);
-//    else if(isnew == 0x02)
-//        set_brightness(ID2, brightness[ID2]);
-//    else if(isnew == 0x03){
-//        set_brightness(ID1, brightness[ID1]);
-//        set_brightness(ID2, brightness[ID2]);
-//    }
+    if(isnew == 0x01) {// 0 0 0 1   id = 1
+        set_brightness(ID1, brightness[0]);
 
-    while(1){
-        set_brightness(ID1, 40);
-        usleep(200);
-        set_brightness(ID2, 40);
-        usleep(10000000);
-        set_brightness(ID1, 0);
-        usleep(200);
-        set_brightness(ID2, 0);
-        usleep(10000000);
+        tcpmutex.lock();
+        g::tcp.SendLightData(ID1,&brightness[0]);
+        tcpmutex.unlock();
+
     }
+    else if(isnew == 0x02){
+        set_brightness(ID2, brightness[1]);
+
+        tcpmutex.lock();
+        g::tcp.SendLightData(ID2,&brightness[1]);
+        tcpmutex.unlock();
+
+    }
+    isnew = 0;
 }
 
 int LightCtrl::OpenCommPort(char *devname)

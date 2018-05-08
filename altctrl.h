@@ -3,7 +3,6 @@
 
 #include <QThread>
 
-
 #define ALT0018 0
 #define ALT0020 1
 

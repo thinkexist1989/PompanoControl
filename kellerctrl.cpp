@@ -17,7 +17,9 @@
 #include <iostream>
 #include <QMutex>
 
-extern QMutex mutex; // defined in main.cpp
+#include <g.h>
+
+extern QMutex tcpmutex;
 
 
 KellerCtrl::KellerCtrl(int fd): m_hPort(fd),pressval(0),tempval(0),m_nDevice(250),stopped(false), isnew(false) {}
@@ -386,22 +388,26 @@ void KellerCtrl::run()  //thread running function
 
      //   usleep(100000);
         nRes = F73(PRESSURE,&pressval);
+     //   g::pressval = pressval;
         if(nRes!= COMM_OK){
-            std::cout << "Reading of pressure value not possible !" << std::endl;
+            std::cout << "KELLER: Reading of pressure value not possible !" << std::endl;
             return;
         }
         isnew = true; // Recieved New Data!!
-   //     std::cout << a++ << "Pressure: " << pressval;
-     //   nRes = F73(TEMPRETURE,&tempval);
 
-     //   if(nRes!= COMM_OK){
-     //       std::cout << "Reading of pressure value not possible !" << std::endl;
-    //        return;
-     //   }
-//        std::cout <<"reicieved keller data!" << std::dec << "Pressure: " << pressval<<std::endl;
-        usleep(50000); //50ms
-     //   std::cout << "       Tempreture: " << tempval << std::endl;
+        nRes = F73(TEMPRETURE,&tempval);
+    //    g::tempval = tempval;
+        if(nRes!= COMM_OK){
+            std::cout << "KELLER: Reading of temperature value not possible !" << std::endl;
+            return;
+        }
 
+        //Send to Upper PC
+        tcpmutex.lock();
+        g::tcp.SendKellerData(&pressval,&tempval);
+        tcpmutex.unlock();
+
+        usleep(100000); //100ms
     }
 
 }

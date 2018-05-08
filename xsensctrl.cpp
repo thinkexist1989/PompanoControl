@@ -12,6 +12,12 @@
 
 #include <iostream>
 
+#include <g.h>
+
+#include <QMutex>
+
+extern QMutex tcpmutex;
+
 //XsensCtrl::XsensCtrl() : m_hPort(0),stopped(false),isnew(false) {}
 
 
@@ -89,7 +95,11 @@ void XsensCtrl::run()
     while(!stopped){
         usleep(100000);
         ReqData();
-  //      std::cout << m_roll << ' '<< m_pitch << ' ' <<m_yaw <<std::endl;
+        tcpmutex.lock();
+        g::tcp.SendXsensData(&m_roll,&m_pitch,&m_yaw);
+        tcpmutex.unlock();
+
+    //    std::cout << m_roll << ' '<< m_pitch << ' ' <<m_yaw <<std::endl;
     }
 
 }

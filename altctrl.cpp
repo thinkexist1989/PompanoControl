@@ -14,23 +14,29 @@
 
 #include <iostream>
 
-extern QMutex mutex;
+#include <g.h>
+
+extern QMutex tcpmutex;
 extern bool isusing;
 
 AltCtrl::AltCtrl(int fd) : m_hPort(fd),stopped(false),isnew(false),m_distance({0}),m_energy({0}),m_correlation({0}), m_temperature({0}) ,m_watertemp(0) {}
 
 void AltCtrl::run()
 {
-   // usleep(1000000);
+    usleep(1000);
     int a = 0;
     while(!stopped){
-
+//        GetData(ALT0018,g::distance[ALT0018],g::energy[ALT0018],g::correlation[ALT0018],g::temperature[ALT0018]);
+//        GetData(ALT0020,g::distance[ALT0020],g::energy[ALT0020],g::correlation[ALT0020],g::temperature[ALT0020]);
         GetData(ALT0018,m_distance[ALT0018],m_energy[ALT0018],m_correlation[ALT0018],m_temperature[ALT0018]);
         GetData(ALT0020,m_distance[ALT0020],m_energy[ALT0020],m_correlation[ALT0020],m_temperature[ALT0020]);
         isnew = true;
         m_watertemp = (m_temperature[0]+m_temperature[1])/2.0;
-        std::cout <<"recieved altimeters data!!" << std::dec<< a++ <<std::endl;
-        usleep(250000);
+        tcpmutex.lock();
+        g::tcp.SendAltData(&m_distance[ALT0018],&m_energy[ALT0018],&m_correlation[ALT0018],&m_distance[ALT0020],&m_energy[ALT0020],&m_correlation[ALT0020],&m_watertemp);
+        tcpmutex.unlock();
+    //    std::cout <<"recieved altimeters data!!" << std::dec<< a++ <<std::endl;
+        usleep(200000);
 
     }
 }
@@ -112,7 +118,7 @@ void AltCtrl::GetData(int ID, float &distance, float &energy, float &correlation
         qDebug()<<"Send to altimeter failed\n";
         return;
     }
-    usleep(200);
+   // usleep(200);
     char recvbuf[42] = {0};
     dw = read(m_hPort,recvbuf,42);
 

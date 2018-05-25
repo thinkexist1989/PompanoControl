@@ -2,7 +2,6 @@
 #define XSENSCTRL_H
 
 #include <QThread>
-#include <g.h>
 
 
 // Preamble indicator of start of packet -->250(0xFA)
